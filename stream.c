@@ -422,6 +422,7 @@ void stream_init(log_level level, unsigned stream_buf_size) {
 
 	if (pthread_setname_np(thread, "stream") != 0) {
 		LOG_DEBUG("unable to set stream thread name: %s", strerror(errno));
+	}
 	
 #endif
 #if WIN
