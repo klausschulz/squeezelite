@@ -23,6 +23,7 @@
 
 #include "squeezelite.h"
 
+
 log_level loglevel;
 
 extern struct buffer *streambuf;
@@ -196,6 +197,16 @@ void decode_init(log_level level, const char *include_codecs, const char *exclud
 #endif
 	pthread_create(&thread, &attr, decode_thread, NULL);
 	pthread_attr_destroy(&attr);
+	
+	// set thread name
+	int pthread_setname_np(pthread_t thread, const char *name);
+	int pthread_getname_np(pthread_t thread,
+                        char *name, size_t len);
+
+	if (pthread_setname_np(thread, "decode") != 0) {
+		LOG_DEBUG("unable to set decode thread name: %s", strerror(errno));
+	}
+
 #endif
 #if WIN
 	thread = CreateThread(NULL, DECODE_THREAD_STACK_SIZE, (LPTHREAD_START_ROUTINE)&decode_thread, NULL, 0, NULL);

@@ -237,6 +237,15 @@ void ir_init(log_level level, char *lircrc) {
 		pthread_attr_setstacksize(&attr, PTHREAD_STACK_MIN + IR_THREAD_STACK_SIZE);
 		pthread_create(&thread, &attr, ir_thread, NULL);
 		pthread_attr_destroy(&attr);
+		
+		// set thread name
+		int pthread_setname_np(pthread_t thread, const char *name);
+		int pthread_getname_np(pthread_t thread,
+                        char *name, size_t len);
+
+		if (pthread_setname_np(thread, "ir") != 0) {
+			LOG_DEBUG("unable to set ir thread name: %s", strerror(errno));
+		}
 
 	} else {
 		LOG_WARN("failed to connect to lircd - ir processing disabled");

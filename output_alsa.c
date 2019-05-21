@@ -1022,13 +1022,23 @@ void output_init_alsa(log_level level, const char *device, unsigned output_buf_s
 	pthread_create(&thread, &attr, output_thread, rates[0] ? "probe" : NULL);
 	pthread_attr_destroy(&attr);
 
+	// set thread name
+	int pthread_setname_np(pthread_t thread, const char *name);
+	int pthread_getname_np(pthread_t thread,
+                        char *name, size_t len);
+
+	if (pthread_setname_np(thread, "output_alsa") != 0) {
+		LOG_DEBUG("unable to set output_alsa thread name: %s", strerror(errno));
+	}
+
 	// try to set this thread to real-time scheduler class, only works as root or if user has permission
 	struct sched_param param;
 	param.sched_priority = rt_priority;
+
 	if (pthread_setschedparam(thread, SCHED_FIFO, &param) != 0) {
 		LOG_DEBUG("unable to set output sched fifo: %s", strerror(errno));
 	} else {
-		LOG_DEBUG("set output sched fifo rt: %u", param.sched_priority);
+		LOG_DEBUG("pthread: output_alsa sched priority: %u", param.sched_priority);
 	}
 }
 

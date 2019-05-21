@@ -164,6 +164,15 @@ void output_init_stdout(log_level level, unsigned output_buf_size, char *params,
 #endif
 	pthread_create(&thread, &attr, output_thread, NULL);
 	pthread_attr_destroy(&attr);
+	
+	// set thread name
+	int pthread_setname_np(pthread_t thread, const char *name);
+	int pthread_getname_np(pthread_t thread,
+                        char *name, size_t len);
+
+	if (pthread_setname_np(thread, "output_stdout") != 0) {
+		LOG_DEBUG("unable to set output_stdout thread name: %s", strerror(errno));
+	}
 #endif
 #if WIN
 	thread = CreateThread(NULL, OUTPUT_THREAD_STACK_SIZE, (LPTHREAD_START_ROUTINE)&output_thread, NULL, 0, NULL);
