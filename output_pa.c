@@ -438,6 +438,7 @@ void _pa_open(void) {
 #if LINUX || OSX || FREEBSD
 		pthread_create(&monitor_thread, NULL, pa_monitor, NULL);
 		
+#if LINUX
 		// set thread name
 		int pthread_setname_np(pthread_t thread, const char *name);
 		int pthread_getname_np(pthread_t thread,
@@ -446,6 +447,7 @@ void _pa_open(void) {
 		if (pthread_setname_np(thread, "output_pa") != 0) {
 			LOG_DEBUG("unable to set output_pa thread name: %s", strerror(errno));
 		}
+#endif
 
 #endif
 #if WIN

@@ -198,6 +198,7 @@ void decode_init(log_level level, const char *include_codecs, const char *exclud
 	pthread_create(&thread, &attr, decode_thread, NULL);
 	pthread_attr_destroy(&attr);
 	
+#if LINUX
 	// set thread name
 	int pthread_setname_np(pthread_t thread, const char *name);
 	int pthread_getname_np(pthread_t thread,
@@ -206,6 +207,7 @@ void decode_init(log_level level, const char *include_codecs, const char *exclud
 	if (pthread_setname_np(thread, "decode") != 0) {
 		LOG_DEBUG("unable to set decode thread name: %s", strerror(errno));
 	}
+#endif
 
 #endif
 #if WIN
