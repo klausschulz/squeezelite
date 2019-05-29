@@ -266,6 +266,13 @@ static void *pa_monitor() {
 
 	LOCK;
 
+#if LINUX
+		const char* threadname = "output_pa\0";
+		if (prctl(PR_SET_NAME, (unsigned long) threadname) != 0) {
+			LOG_DEBUG("setting threadname failed: %s", strerror(errno));
+		}
+#endif
+
 	if (monitor_thread_running) {
 		LOG_DEBUG("monitor thread already running");
 		UNLOCK;
@@ -438,16 +445,6 @@ void _pa_open(void) {
 #if LINUX || OSX || FREEBSD
 		pthread_create(&monitor_thread, NULL, pa_monitor, NULL);
 		
-#if LINUX
-		// set thread name
-		int pthread_setname_np(pthread_t thread, const char *name);
-		int pthread_getname_np(pthread_t thread,
-                        char *name, size_t len);
-
-		if (pthread_setname_np(thread, "output_pa") != 0) {
-			LOG_DEBUG("unable to set output_pa thread name: %s", strerror(errno));
-		}
-#endif
 
 #endif
 #if WIN

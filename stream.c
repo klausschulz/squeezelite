@@ -155,6 +155,13 @@ static void *stream_thread() {
 
 		LOCK;
 
+#if LINUX
+		const char* threadname = "stream\0";
+		if (prctl(PR_SET_NAME, (unsigned long) threadname) != 0) {
+			LOG_DEBUG("setting threadname failed: %s", strerror(errno));
+		}
+#endif
+
 		space = min(_buf_space(streambuf), _buf_cont_write(streambuf));
 
 		if (fd < 0 || !space || stream.state <= STREAMING_WAIT) {
@@ -415,17 +422,6 @@ void stream_init(log_level level, unsigned stream_buf_size) {
 	pthread_create(&thread, &attr, stream_thread, NULL);
 	pthread_attr_destroy(&attr);
 	
-#if LINUX
-	// set thread name
-	int pthread_setname_np(pthread_t thread, const char *name);
-	int pthread_getname_np(pthread_t thread,
-                        char *name, size_t len);
-
-	if (pthread_setname_np(thread, "stream") != 0) {
-		LOG_DEBUG("unable to set stream thread name: %s", strerror(errno));
-	}
-#endif
-
 	
 #endif
 #if WIN

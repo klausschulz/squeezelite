@@ -647,8 +647,14 @@ static void *output_thread(void *arg) {
 	bool output_off = (output.state == OUTPUT_OFF);
 	bool probe_device = (arg != NULL);
 	int err;
+	const char* threadname = "output_alsa\0";
 
+	
 	while (running) {
+		
+		if (prctl(PR_SET_NAME, (unsigned long) threadname) != 0) {
+			LOG_DEBUG("setting threadname failed: %s", strerror(errno));
+		}
 
 		// disabled output - player is off
 		while (output_off) {
@@ -918,6 +924,7 @@ void output_init_alsa(log_level level, const char *device, unsigned output_buf_s
 	char *alsa_sample_fmt = NULL;
 	bool alsa_mmap = true;
 	bool alsa_reopen = false;
+	int err; 
 
 	char *volume_mixer_name = next_param(volume_mixer, ',');
 	char *volume_mixer_index = next_param(NULL, ',');
@@ -1006,7 +1013,9 @@ void output_init_alsa(log_level level, const char *device, unsigned output_buf_s
 	}
 
 #ifdef __GLIBC__
+	//turn off malloc trimming
 	mallopt(M_TRIM_THRESHOLD, -1);
+	//turn off mmap usuage
 	mallopt(M_MMAP_MAX, 0);
 	LOG_INFO("glibc detected using mallopt");
 #endif
@@ -1022,24 +1031,36 @@ void output_init_alsa(log_level level, const char *device, unsigned output_buf_s
 	pthread_create(&thread, &attr, output_thread, rates[0] ? "probe" : NULL);
 	pthread_attr_destroy(&attr);
 
-	// set thread name
-	int pthread_setname_np(pthread_t thread, const char *name);
-	int pthread_getname_np(pthread_t thread,
-                        char *name, size_t len);
-
-	if (pthread_setname_np(thread, "output_alsa") != 0) {
-		LOG_DEBUG("unable to set output_alsa thread name: %s", strerror(errno));
-	}
-
 	// try to set this thread to real-time scheduler class, only works as root or if user has permission
+	int policy = SCHED_FIFO;
 	struct sched_param param;
 	param.sched_priority = rt_priority;
 
-	if (pthread_setschedparam(thread, SCHED_FIFO, &param) != 0) {
-		LOG_DEBUG("unable to set output sched fifo: %s", strerror(errno));
-	} else {
-		LOG_DEBUG("pthread: output_alsa sched priority: %u", param.sched_priority);
+	if ((err = pthread_setschedparam(thread, policy, &param)) < 0) {
+		LOG_DEBUG("unable to set sched params %s", strerror(errno));
 	}
+	
+	
+
+
+
+#ifdef LOG_DEBUG
+
+	const char* threadname = "output_alsa";
+
+	if ((err = pthread_getschedparam(thread, &policy, &param)) < 0) { 
+		LOG_DEBUG("unable to get sched params %s", strerror(errno));
+	}
+
+	LOG_DEBUG("%s: pthread: sched - policy: %s, priority: %u", threadname,
+										(policy == SCHED_FIFO)  ? "SCHED_FIFO" :
+										(policy == SCHED_RR)    ? "SCHED_RR" :
+										(policy == SCHED_OTHER) ? "SCHED_OTHER" :
+										"???",
+										param.sched_priority);
+
+#endif
+
 }
 
 void output_close_alsa(void) {

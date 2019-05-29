@@ -265,6 +265,7 @@
 #include <poll.h>
 #include <dlfcn.h>
 #include <pthread.h>
+#include <sys/prctl.h>
 #include <signal.h>
 #if SUN
 #include <sys/types.h>
