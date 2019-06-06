@@ -35,3 +35,7 @@ Gordon Henderson, which is subject to its own license.<br>
 This software uses libraries from the FFmpeg project under<br>
 the LGPLv2.1 and its source can be downloaded from<br>
 https://sourceforge.net/projects/lmsclients/files/source/<br>
+<br>
+Additions (c) Klaus Schulz, 2019 under the same license terms<br>
+- Introduce threadnaming under Linux operation<br>
+- Enhance realtime thread logging within alsa-output thread<br>
