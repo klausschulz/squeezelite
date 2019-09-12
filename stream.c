@@ -481,14 +481,14 @@ void stream_file(const char *header, size_t header_len, unsigned threshold) {
 	UNLOCK;
 }
 
-void stream_sock(u32_t ip, u16_t port, const char *header, size_t header_len, unsigned threshold, bool cont_wait) {
+static int _tcp_connect(u32_t ip, u16_t port) {
 	struct sockaddr_in addr;
 
 	int sock = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (sock < 0) {
 		LOG_ERROR("failed to create socket");
-		return;
+		return -1;
 	}
 
 	memset(&addr, 0, sizeof(addr));
@@ -503,13 +503,22 @@ void stream_sock(u32_t ip, u16_t port, const char *header, size_t header_len, un
 
 	if (connect_timeout(sock, (struct sockaddr *) &addr, sizeof(addr), 10) < 0) {
 		LOG_INFO("unable to connect to server");
+		closesocket(sock);
+		return -1;
+	}
+	return sock;
+}
+
+void stream_sock(u32_t ip, u16_t port, const char *header, size_t header_len, unsigned threshold, bool cont_wait) {
+	int sock = _tcp_connect(ip, port);
+	if (sock < 0) {
 		LOCK;
 		stream.state = DISCONNECT;
 		stream.disconnect = UNREACHABLE;
 		UNLOCK;
 		return;
 	}
-	
+
 #if USE_SSL
 	if (ntohs(port) == 443) {
 		char *server = strcasestr(header, "Host:");
@@ -526,7 +535,7 @@ void stream_sock(u32_t ip, u16_t port, const char *header, size_t header_len, un
 			SSL_set_tlsext_host_name(ssl, p);
 			free(servername);
 		}
-		
+
 		while (1) {
 			int status, err = 0;
 
@@ -546,15 +555,20 @@ void stream_sock(u32_t ip, u16_t port, const char *header, size_t header_len, un
 			closesocket(sock);
 			SSL_free(ssl);
 			ssl = NULL;
-			LOCK;
-			stream.state = DISCONNECT;
-			stream.disconnect = UNREACHABLE;
-			UNLOCK;
 
-			return;
+			LOG_INFO("Trying non-SSL connection");
+			sock = _tcp_connect(ip, port);
+			if (sock < 0) {
+				LOCK;
+				stream.state = DISCONNECT;
+				stream.disconnect = UNREACHABLE;
+				UNLOCK;
+				return;
+			}
+			break;
 		}
 	} else {
-		ssl = NULL;	
+		ssl = NULL;
 	}
 #endif
 
