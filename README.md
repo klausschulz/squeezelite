@@ -32,7 +32,10 @@ This software uses libraries from the FFmpeg project under<br>
 the LGPLv2.1 and its source can be downloaded from<br>
 https://sourceforge.net/projects/lmsclients/files/source/<br>
 <br>
-Additions (c) Klaus Schulz, 2019 under the same license terms<br>
-- Introduce threadnaming under Linux operation<br>
-- Enhance realtime thread logging within alsa-output thread<br>
-- Rewrite alsa output volume control (external) - introducing linear volume control "1dB/click" <br>
+Additions (c) Klaus Schulz, 2020 under the same as original license terms<br>
+- introduce threadnaming under Linux operation<br>
+- enhance realtime thread logging within alsa-output thread<br>
+- introducing option to assign CPU affinity to output_alsa thread<br>
+- rewrite alsa output volume control (external) - introducing linear volume control "1dB/click"<br>
+- rewrite alsa output volume control (internal) - introducing linear volume control "1dB/click"<br>
+- introduce Makefiles with optimized and processor specific gcc parameters for RPI 3 and 4<br>
