@@ -35,3 +35,4 @@ https://sourceforge.net/projects/lmsclients/files/source/<br>
 Additions (c) Klaus Schulz, 2019 under the same license terms<br>
 - Introduce threadnaming under Linux operation<br>
 - Enhance realtime thread logging within alsa-output thread<br>
+- Rewrite alsa output volume control (external) - introducing linear volume control "1dB/click" <br>

@@ -3,6 +3,7 @@
  *
  *  (c) Adrian Smith 2012-2015, triode1@btinternet.com
  *      Ralph Irving 2015-2017, ralph_irving@hotmail.com
+ *  (c) Modified work Copyright Klaus Schulz 2020
  *  
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,7 +27,7 @@
 
 #include <signal.h>
 
-#define TITLE "Squeezelite " VERSION ", Copyright 2012-2015 Adrian Smith, 2015-2019 Ralph Irving."
+#define TITLE "Squeezelite " VERSION ", Copyright 2012-2015 Adrian Smith, 2015-2019 Ralph Irving. 2020 KSchulz."
 
 #define CODECS_BASE "flac,pcm,mp3,ogg"
 #if NO_FAAD
@@ -132,9 +133,12 @@ static void usage(const char *argv0) {
 # if ALSA
 		   "  -O <mixer device>\tSpecify mixer device, defaults to 'output device'\n"
 		   "  -L \t\t\tList volume controls for output device\n"
-		   "  -U <control>\t\tUnmute ALSA control and set to full volume (not supported with -V)\n"
-		   "  -V <control>\t\tUse ALSA control for volume adjustment, otherwise use software volume adjustment\n"
-		   "  -X \t\t\tUse linear volume adjustments instead of in terms of dB (only for hardware volume control)\n"
+		   "  -U <control>\t\tVolume control external (HW) on audio interface. Set to 100% = 0dB. (not supported with -V)\n"
+		   "  -V <control>\t\tVolume control external (HW) on audio interface. Follows non-linear LMS VC scale - 1click <> 1dB\n"
+		   "  -X \t\t\tVolume control external (HW) on audio interface. Linear dB-scale - 1click = 1dB\n"
+		   "  -Y \t\t\tVolume control internal. Linear dB-scale - 1click = 1dB\n"
+   		   "  -A \t\t\tAssign Alsa output thread to last CPU\n"
+
 #endif
 #if LINUX || FREEBSD || SUN
 		   "  -z \t\t\tDaemonize\n"
@@ -143,7 +147,7 @@ static void usage(const char *argv0) {
 		   "  -Z <rate>\t\tReport rate to server in helo as the maximum sample rate we can support\n"
 #endif
 		   "  -t \t\t\tLicense terms\n"
-		   "  -? \t\t\tDisplay this help text\n"
+		   "  -? || -h \t\tDisplay this help text\n"
 		   "\n"
 		   "Build options:"
 #if SUN
@@ -239,6 +243,11 @@ static void license(void) {
 		   "GNU General Public License for more details.\n\n"
 		   "You should have received a copy of the GNU General Public License\n"
 		   "along with this program.  If not, see <http://www.gnu.org/licenses/>.\n"
+		   "\nContains modifications contributed by (c) Klaus Schulz - Copyright 2020\n"
+		   " * linear 1click/dB internal and external volume control\n"
+		   " * change CPU affinity of output_alsa thread\n"
+		   " * threadnaming\n"
+		   " * RPi3/4 Makefiles\n"
 #if DSD		   
 		   "\nContains dsd2pcm library Copyright 2009, 2011 Sebastian Gesemann which\n"
 		   "is subject to its own license.\n"
@@ -303,6 +312,8 @@ int main(int argc, char **argv) {
 	char *output_mixer = NULL;
 	bool output_mixer_unmute = false;
 	bool linear_volume = false;
+	bool linear_dB_scale_internal = false;
+	bool alsa_output_affinity = false;
 #endif
 #if DSD
 	unsigned dsd_delay = 0;
@@ -355,9 +366,9 @@ int main(int argc, char **argv) {
 				   , opt) && optind < argc - 1) {
 			optarg = argv[optind + 1];
 			optind += 2;
-		} else if (strstr("ltz?W"
+		} else if (strstr("ltz?hW"
 #if ALSA
-						  "LX"
+						  "LXYA"
 #endif
 #if RESAMPLE
 						  "uR"
@@ -588,8 +599,15 @@ int main(int argc, char **argv) {
 		case 'X':
 			linear_volume = true;
 			break;
+		case 'Y':
+			linear_dB_scale_internal = true;
+			break;
 		case 'U':
 			output_mixer_unmute = true;
+			break;
+		case 'A':
+			alsa_output_affinity = true;
+			break;
 		case 'V':
 			if (output_mixer) {
 				fprintf(stderr, "-U and -V option should not be used at same time\n");
@@ -680,6 +698,9 @@ int main(int argc, char **argv) {
 		case '?':
 			usage(argv[0]);
 			exit(0);
+		case 'h':
+			usage(argv[0]);
+			exit(0);
 		default:
 			fprintf(stderr, "Arg error: %s\n", argv[optind]);
 			break;
@@ -762,7 +783,7 @@ int main(int argc, char **argv) {
 	} else {
 #if ALSA
 		output_init_alsa(log_output, output_device, output_buf_size, output_params, rates, rate_delay, rt_priority, idle, mixer_device, output_mixer,
-						 output_mixer_unmute, linear_volume);
+						 output_mixer_unmute, linear_volume, linear_dB_scale_internal, alsa_output_affinity);
 #endif
 #if PORTAUDIO
 		output_init_pa(log_output, output_device, output_buf_size, output_params, rates, rate_delay, idle);

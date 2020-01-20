@@ -24,6 +24,9 @@
 
 // Output using Alsa
 
+#define _GNU_SOURCE
+
+
 #include "squeezelite.h"
 
 #if ALSA
@@ -32,8 +35,13 @@
 #include <sys/mman.h>
 #include <malloc.h>
 #include <math.h>
+#include <sched.h>
+#include <unistd.h>
+
 
 #define MAX_DEVICE_LEN 128
+
+
 
 static snd_pcm_format_t fmts[] = { SND_PCM_FORMAT_S32_LE, SND_PCM_FORMAT_S24_LE, SND_PCM_FORMAT_S24_3LE, SND_PCM_FORMAT_S16_LE,
 								   SND_PCM_FORMAT_UNKNOWN };
@@ -44,7 +52,7 @@ static snd_pcm_format_t fmts[] = { SND_PCM_FORMAT_S32_LE, SND_PCM_FORMAT_S24_LE,
 #define NATIVE_FORMAT SND_PCM_FORMAT_S32_BE
 #endif
 
-// ouput device
+// output device
 static struct {
 	char device[MAX_DEVICE_LEN + 1];
 	char *ctl;
@@ -62,10 +70,14 @@ static struct {
 	u8_t *write_buf;
 	const char *volume_mixer_name;
 	bool mixer_linear;
+	bool linear_dB_internal;
+	bool output_affinity;
 	snd_mixer_elem_t* mixer_elem;
 	snd_mixer_t *mixer_handle;
 	long mixer_min;
 	long mixer_max;
+	long mixer_mindb;
+	long mixer_maxdb;
 } alsa;
 
 static snd_pcm_t *pcmp = NULL;
@@ -171,69 +183,138 @@ void list_mixers(const char *output_device) {
 			printf("\n");
 		}
 	}
-	printf("\n");
 
 	snd_mixer_close(handle);
 }
 
-#define MINVOL_DB 72 // LMS volume map for SqueezePlay sends values in range ~ -72..0 dB
-
-static void set_mixer(bool setmax, float ldB, float rdB) {
+#define MINVOL_DB -72        // LMS volume map for SqueezePlay sends values in range ~ -72..0 dB
+		
+static void set_mixer(bool setmax, bool setmin, long ldb, long rdb) {
 	int err;
-	long nleft, nright;
+	long nldb, nrdb;
+
+	if (ldb < MINVOL_DB || ldb == SND_CTL_TLV_DB_GAIN_MUTE) 
+		setmin = 1;
+
+	if (setmax) 
+		ldb = rdb = alsa.mixer_maxdb / 100;
+	if (setmin) 
+		ldb = rdb = alsa.mixer_mindb / 100;
+
+	//FIXME: mute setting -999999.99 at mixer_mindb - currently covered by setmin.
+	//FIXME: if (alsa.mixer_mindb == SND_CTL_TLV_DB_GAIN_MUTE) {
+
+
+	LOG_DEBUG("(VC) external set: setmax: %d setmin: %d", setmax, setmin);
+	LOG_DEBUG("(VC) external set level in dB: %s, l: %ld r: %ld", alsa.volume_mixer_name, ldb, rdb);
 	
-	if (alsa.mixer_linear) {
-        long lraw, rraw;
-        if (setmax) {
-            lraw = rraw = alsa.mixer_max;
-        } else {
-            lraw = ((ldB > -MINVOL_DB ? MINVOL_DB + floor(ldB) : 0) / MINVOL_DB * (alsa.mixer_max-alsa.mixer_min)) + alsa.mixer_min;
-            rraw = ((rdB > -MINVOL_DB ? MINVOL_DB + floor(rdB) : 0) / MINVOL_DB * (alsa.mixer_max-alsa.mixer_min)) + alsa.mixer_min;
-        }
-        LOG_DEBUG("setting vol raw [%ld..%ld]", alsa.mixer_min, alsa.mixer_max);
-        if ((err = snd_mixer_selem_set_playback_volume(alsa.mixer_elem, SND_MIXER_SCHN_FRONT_LEFT, lraw)) < 0) {
-            LOG_ERROR("error setting left volume: %s", snd_strerror(err));
-        }
-        if ((err = snd_mixer_selem_set_playback_volume(alsa.mixer_elem, SND_MIXER_SCHN_FRONT_RIGHT, rraw)) < 0) {
-            LOG_ERROR("error setting right volume: %s", snd_strerror(err));
-        }
-	} else {
-		// set db directly
-		LOG_DEBUG("setting vol dB [%ld..%ld]", alsa.mixer_min, alsa.mixer_max);
-		if (setmax) {
-			// set to 0dB if available as this should be max volume for music recored at max pcm values
-			if (alsa.mixer_max >= 0 && alsa.mixer_min <= 0) {
-				ldB = rdB = 0;
-			} else {
-				ldB = rdB = alsa.mixer_max;
-			}
-		}
-		if ((err = snd_mixer_selem_set_playback_dB(alsa.mixer_elem, SND_MIXER_SCHN_FRONT_LEFT, 100 * ldB, 1)) < 0) {
-			LOG_ERROR("error setting left volume: %s", snd_strerror(err));
-		}
-		if ((err = snd_mixer_selem_set_playback_dB(alsa.mixer_elem, SND_MIXER_SCHN_FRONT_RIGHT, 100 * rdB, 1)) < 0) {
-			LOG_ERROR("error setting right volume: %s", snd_strerror(err));
-		}
+	snd_mixer_handle_events(alsa.mixer_handle); 
+
+	if ((err = snd_mixer_selem_set_playback_dB_all(alsa.mixer_elem, 100 * ldb, 0)) < 0) {
+			LOG_ERROR("error setting left volume(dB): %s", snd_strerror(err));
 	}
 
-	if ((err = snd_mixer_selem_get_playback_volume(alsa.mixer_elem, SND_MIXER_SCHN_FRONT_LEFT, &nleft)) < 0) {
-		LOG_ERROR("error getting left vol: %s", snd_strerror(err));
-	}
-	if ((err = snd_mixer_selem_get_playback_volume(alsa.mixer_elem, SND_MIXER_SCHN_FRONT_RIGHT, &nright)) < 0) {
-		LOG_ERROR("error getting right vol: %s", snd_strerror(err));
-	}
+// function calls not needed if not in debug mode
+#ifdef LOG_DEBUG
 
-	LOG_DEBUG("%s left: %3.1fdB -> %ld right: %3.1fdB -> %ld", alsa.volume_mixer_name, ldB, nleft, rdB, nright);
+	snd_mixer_handle_events(alsa.mixer_handle); 
+	if ((err = snd_mixer_selem_get_playback_dB(alsa.mixer_elem, SND_MIXER_SCHN_FRONT_LEFT, &nldb)) < 0) {
+		LOG_ERROR("error getting left vol dB: %s", snd_strerror(err));
+	}
+	snd_mixer_handle_events(alsa.mixer_handle); 
+	if ((err = snd_mixer_selem_get_playback_dB(alsa.mixer_elem, SND_MIXER_SCHN_FRONT_RIGHT, &nrdb)) < 0) {
+		LOG_ERROR("error getting right vol dB: %s", snd_strerror(err));
+	}
+	
+	LOG_DEBUG("(VC) external get level in dB: %s, l: %ld r: %ld", alsa.volume_mixer_name, nldb / 100 , nrdb / 100);
+
+#endif
+
+
 }
 
-void set_volume(unsigned left, unsigned right) {
-	float ldB, rdB;
 
+void set_volume(unsigned left, unsigned right) {
+	long l = 0;
+	long r = 0;
+	int i;
+	bool setmin = 0;
+	bool setmax = 0;
+
+	const long gscale[101] = { 65536, 61952, 58624, 55296, 52224, 49408, 46592, 44032, 41728, 39424,
+                                    37120, 35072, 33024, 31232, 29696, 27904, 26368, 24832, 23552, 22272,
+                                    20992, 19968, 18688, 17664, 16640, 15872, 14848, 14080, 13312, 12544,
+                                    12032, 11264, 10752,  9984,  9472,  8960,  8448,  7936,  7680,  7168,
+                                     6656,  6400,  6144,  5632,  5376,  5120,  4864,  4608,  4352,  4096,
+                                     3840,  3584,  3328, 3328,  3072,  2816, 2816,  2560,  2304, 2304, 
+                                     2048,  2050,  1937,  1830,  1729,  1634,  1543,  1458,  1378,  1302,
+                                     1230,  1162,  1098,  1037,   980,   926,   781,   658,   555,   468,
+                                      395,   333,   281,   237,   200,   168,   142,   120,   101,    85,
+                                       72,    61,    51,    43,    36,    31,    26,    22,    18,    16,
+                                        0, };
+
+	// gscale consists of 101 values reflecting the full LMS volume control scale
+	// it reflects the LMS special tailored logarithmic VC curve, see LMS squeezeplayer2 player sources
+	// the numbers are supplied by LMS through slimproto (left/right). 
+	// the 1st field equals 100, 2nd = 99, 3rd = ....  101st = 0 on the VC 100->0 scale
+	// LMS issue 1: non lineraties and ambigeous values 48/47=3328 45/44=2816 42/41=2304 
+	// LMS issue 2: Swapped order by LMS: 40=2048, 39=2050 
+	// Workaround: fields 2048/2050 swapped in array
+	// Troubletickets on LMS have been issues
+	// Not tested yet: 
+	// replay gain and crossfade - & applicable at all? 
+	// unbalanced channel gain - applicable at all? 
+
+	const long gscalenew[101] = { 65536,58409,52057,46396,41350,36854,32768,29274,26090,
+                                  23253,20724,18471,16384,14672,13076,11654,10387,9257,8192,
+                                  7353,6554,5841,5206,4640,4096,3685,3285,2927,2609,2325,
+                                  2048,1847,1646,1467,1308,1165,1024,926,825,735,655,
+                                  584,512,464,414,369,328,293,256,233,207,185,165,147,128,
+                                  117,104,93,83,74,64,58,52,46,41,37,32,29,26,23,21,18,16,
+                                  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, };
+
+
+	// SL internal software volume control
 	if (!alsa.volume_mixer_name) {
-		LOG_DEBUG("setting internal gain left: %u right: %u", left, right);
+		LOG_DEBUG("(VC) internal level: l: %u r: %u", left, right);
+
+		/////////////////////////////////////////////////////////
+		//new internal VC mapping start
+		/////////////////////////////////////////////////////////
+		if (alsa.linear_dB_internal) {
+			
+			int lower = 0;
+			
+			if (left > 0) {
+				
+				for(i = 0; i < sizeof(gscale) / sizeof(gscale[0]); i++) 
+				{
+					if (gscale[i] < left) 
+					{
+						lower = i;
+						break;
+					}
+				}
+			l = gscalenew[lower - 1];
+			r = gscalenew[lower - 1];
+			
+			LOG_DEBUG("(VC) new mapping - internal level: l: %u r: %u", l, r);
+			LOG_DEBUG("(VC) new mapping - internal position: %u", lower - 1 );
+			}
+			
+		} else {
+			
+			l = left;
+			r = right;
+			
+		}
+		/////////////////////////////////////////////////////
+		//new internal VC mapping end
+		/////////////////////////////////////////////////////
+
 		LOCK;
-		output.gainL = left;
-		output.gainR = right;
+		output.gainL = l;
+		output.gainR = r;
 		UNLOCK;
 		return;
 	} else {
@@ -243,11 +324,37 @@ void set_volume(unsigned left, unsigned right) {
 		UNLOCK;
 	}
 
-	// convert 16.16 fixed point to dB
-	ldB = 20 * log10( left  / 65536.0F );
-	rdB = 20 * log10( right / 65536.0F );
+    if ( ! alsa.mixer_linear) {
+		if (left > 0) {
+			// convert 16.16 fixed point to dB
+			l = r = floor(20 * log10( left  / 65536.0F ));
+		} else {
+			setmin = 1;
+			l = r = alsa.mixer_mindb / 100;
+		}
+		LOG_DEBUG("(VC) external: non-linear mode active");
+	} else {
+		// HW volume control in db mapped against LMS input
+		// find equal or nearest value in gscale array
+		int low = 0;
+		if (left > 0) {
+			for(i = 0; i < sizeof(gscale) / sizeof(gscale[0]); i++) {
+				if (gscale[i] < left) {
+					low = i;
+					break;
+				}
+			}
+		l = r = (gscale[low - 1] - left ) >= ( left - gscale[low])  ? (-1) * low : (-1) * (low - 1);
+		} else {
+			setmin = 1;
+			l = r = alsa.mixer_mindb / 100;
+		}
+		LOG_DEBUG("(VC) external: linear mode active");
+	}
 
-	set_mixer(false, ldB, rdB);
+	LOG_DEBUG("(VC) external level in dB: l: %ld r: %ld", l, r);
+
+	set_mixer(setmax, setmin, l, r);
 }
 
 static void *alsa_error_handler(const char *file, int line, const char *function, int err, const char *fmt, ...) {
@@ -602,7 +709,7 @@ static int _write_frames(frames_t out_frames, bool silence, s32_t gainL, s32_t g
 
 		if (!silence) {
 
-			if (gainL != FIXED_ONE || gainR!= FIXED_ONE) {
+			if (gainL != FIXED_ONE || gainR != FIXED_ONE) {
 				_apply_gain(outputbuf, out_frames, gainL, gainR);
 			}
 		}
@@ -897,27 +1004,31 @@ int mixer_init_alsa(const char *device, const char *mixer, int mixer_index) {
 		return -1;
 	}
 
+	snd_mixer_handle_events(alsa.mixer_handle); 
+
+
 	if (snd_mixer_selem_has_playback_switch(alsa.mixer_elem)) {
 		snd_mixer_selem_set_playback_switch_all(alsa.mixer_elem, 1); // unmute
 	}
+	
+	snd_mixer_handle_events(alsa.mixer_handle); 
 
-	err = snd_mixer_selem_get_playback_dB_range(alsa.mixer_elem, &alsa.mixer_min, &alsa.mixer_max);
 
-	if (err < 0 || alsa.mixer_max - alsa.mixer_min < 1000 || alsa.mixer_linear) {
-	    alsa.mixer_linear = 1;
-		// unable to get db range or range is less than 10dB - ignore and set using raw values
-		if ((err = snd_mixer_selem_get_playback_volume_range(alsa.mixer_elem, &alsa.mixer_min, &alsa.mixer_max)) < 0)
-		{
-			LOG_ERROR("Unable to get volume raw range");
+	if ((err = snd_mixer_selem_get_playback_dB_range(alsa.mixer_elem, &alsa.mixer_mindb, &alsa.mixer_maxdb)) < 0 ) {
+			LOG_ERROR("Unable to get volume dB range");
 			return -1;
-		}
 	}
-    return 0;
+
+	LOG_DEBUG("(VC) external - range in db: min: %ld max: %ld", alsa.mixer_mindb / 100, alsa.mixer_maxdb / 100);
+
+	return 0;
 }
 
 static pthread_t thread;
 
-void output_init_alsa(log_level level, const char *device, unsigned output_buf_size, char *params, unsigned rates[], unsigned rate_delay, unsigned rt_priority, unsigned idle, char *mixer_device, char *volume_mixer, bool mixer_unmute, bool mixer_linear) {
+void output_init_alsa(log_level level, const char *device, unsigned output_buf_size, char *params, unsigned rates[], 
+						unsigned rate_delay, unsigned rt_priority, unsigned idle, char *mixer_device, char *volume_mixer, 
+						bool mixer_unmute, bool mixer_linear, bool linear_dB_internal, bool output_affinity) {
 
 	unsigned alsa_buffer = ALSA_BUFFER_TIME;
 	unsigned alsa_period = ALSA_PERIOD_COUNT;
@@ -960,6 +1071,8 @@ void output_init_alsa(log_level level, const char *device, unsigned output_buf_s
 	alsa.mixer_ctl = mixer_device ? ctl4device(mixer_device) : alsa.ctl;
 	alsa.volume_mixer_name = volume_mixer_name;
 	alsa.mixer_linear = mixer_linear;
+	alsa.linear_dB_internal = linear_dB_internal;
+	alsa.output_affinity = output_affinity;
 
 	output.format = 0;
 	output.buffer = alsa_buffer;
@@ -999,17 +1112,17 @@ void output_init_alsa(log_level level, const char *device, unsigned output_buf_s
 		}
 	}
 	if (mixer_unmute && alsa.volume_mixer_name) {
-		set_mixer(true, 0, 0);
+		set_mixer(1, 0, 0, 0);
 		alsa.volume_mixer_name = NULL;
 	}
 
 #if LINUX
 	// RT linux - aim to avoid pagefaults by locking memory: 
 	// https://rt.wiki.kernel.org/index.php/Threaded_RT-application_with_memory_locking_and_stack_handling_example
-	if (mlockall(MCL_CURRENT | MCL_FUTURE) == -1) {
-		LOG_INFO("unable to lock memory: %s", strerror(errno));
+	if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
+		LOG_INFO("(rt) - unable to lock memory: %s", strerror(errno));
 	} else {
-		LOG_INFO("memory locked");
+		LOG_INFO("(rt) - memory locked");
 	}
 
 #ifdef __GLIBC__
@@ -1017,7 +1130,7 @@ void output_init_alsa(log_level level, const char *device, unsigned output_buf_s
 	mallopt(M_TRIM_THRESHOLD, -1);
 	//turn off mmap usuage
 	mallopt(M_MMAP_MAX, 0);
-	LOG_INFO("glibc detected using mallopt");
+	LOG_INFO("(rt) - glibc detected using mallopt");
 #endif
 
 	touch_memory(silencebuf, MAX_SILENCE_FRAMES * BYTES_PER_FRAME);
@@ -1040,7 +1153,28 @@ void output_init_alsa(log_level level, const char *device, unsigned output_buf_s
 		LOG_DEBUG("unable to set sched params %s", strerror(errno));
 	}
 	
+	if (alsa.output_affinity) {
 	
+		cpu_set_t mask;
+		ulong ncores = sysconf(_SC_NPROCESSORS_CONF);
+
+		LOG_DEBUG("number of processors %d", ncores);
+
+		//clears the actual mask
+		CPU_ZERO(&mask);
+
+		// assign output thread to last CPU = ncores - 1
+		CPU_SET( ncores - 1 , &mask);
+
+		LOG_DEBUG("affinity assigned to processor %d", ncores - 1);
+
+	
+		if ((err = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &mask)) < 0) {
+			LOG_DEBUG("unable to set thread affinity %s", strerror(errno));
+			
+		CPU_FREE(&mask);
+		}
+	}
 
 
 

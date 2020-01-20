@@ -24,12 +24,12 @@
 
 // make may define: PORTAUDIO, SELFPIPE, RESAMPLE, RESAMPLE_MP, VISEXPORT, GPIO, IR, DSD, LINKALL to influence build
 
-#define MAJOR_VERSION "1.9"
-#define MINOR_VERSION "6"
-#define MICRO_VERSION "1198"
+#define MAJOR_VERSION "2.0"
+#define MINOR_VERSION "0"
+#define MICRO_VERSION "1000"
 
 #if defined(CUSTOM_VERSION)
-#define VERSION "v" MAJOR_VERSION "." MINOR_VERSION "-" MICRO_VERSION STR(CUSTOM_VERSION)
+#define VERSION "v" MAJOR_VERSION "." MINOR_VERSION "-" MICRO_VERSION "-" STR(CUSTOM_VERSION)
 #else
 #define VERSION "v" MAJOR_VERSION "." MINOR_VERSION "-" MICRO_VERSION
 #endif
@@ -686,7 +686,7 @@ void list_devices(void);
 void list_mixers(const char *output_device);
 void set_volume(unsigned left, unsigned right);
 bool test_open(const char *device, unsigned rates[], bool userdef_rates);
-void output_init_alsa(log_level level, const char *device, unsigned output_buf_size, char *params, unsigned rates[], unsigned rate_delay, unsigned rt_priority, unsigned idle, char *mixer_device, char *volume_mixer, bool mixer_unmute, bool mixer_linear);
+void output_init_alsa(log_level level, const char *device, unsigned output_buf_size, char *params, unsigned rates[], unsigned rate_delay, unsigned rt_priority, unsigned idle, char *mixer_device, char *volume_mixer, bool mixer_unmute, bool mixer_linear, bool linear_dB_internal, bool alsa_output_affinity);
 void output_close_alsa(void);
 #endif
 
