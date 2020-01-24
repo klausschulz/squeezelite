@@ -38,6 +38,6 @@ Additions (c) Klaus Schulz, Copyright 2020 under the same as original GNU V3++ l
 - enhance realtime thread logging within output_alsa thread<br>
 - rewrite output_alsa volume control (external) - introducing linear volume control "1dB/click"<br>
 - rewrite output_alsa volume control (internal) - introducing linear volume control "1dB/click"<br>
-- introduce Makefiles with optimized and processor specific gcc parameters for RPi 3 and 4<br>
+- introducing Makefiles with optimized and processor specific gcc parameters for RPi 3 and 4<br>
 <br>
 
