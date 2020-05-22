@@ -1,6 +1,7 @@
 #Cross compile support - create a Makefile which defines these three variables and then includes this Makefile...
 CFLAGS	?= -Wall -fPIC -O2
-LDADD	?= -lasound -lpthread -lm -lrt
+CFLAGS	+= -fcommon
+LDADD	?= -lpthread -lm -lrt
 EXECUTABLE ?= squeezelite
 
 # passing one or more of these in $(OPTS) enables optional feature inclusion
@@ -20,7 +21,7 @@ OPT_OPUS    = -DOPUS
 
 SOURCES = \
 	main.c slimproto.c buffer.c stream.c utils.c \
-	output.c output_alsa.c output_pa.c output_stdout.c output_pack.c decode.c \
+	output.c output_alsa.c output_pa.c output_stdout.c output_pack.c output_pulse.c decode.c \
 	flac.c pcm.c mad.c vorbis.c mpg.c
 
 SOURCES_DSD      = dsd.c dop.c dsd2pcm/dsd2pcm.c
@@ -35,7 +36,7 @@ SOURCES_FAAD     = faad.c
 SOURCES_SSL      = sslsym.c
 SOURCES_OPUS     = opus.c
 
-LINK_LINUX       = -ldl
+LINK_LINUX       = -lasound -ldl
 LINK_SSL         = -lssl -lcrypto
 LINK_ALAC        = -lalac
 
