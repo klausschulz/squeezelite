@@ -36,6 +36,7 @@
 
 struct flac {
 	FLAC__StreamDecoder *decoder;
+	u8_t container;
 #if !LINKALL
 	// FLAC symbols to be dynamically loaded
 	const char **FLAC__StreamDecoderErrorStatusString;
@@ -232,25 +233,30 @@ static void error_cb(const FLAC__StreamDecoder *decoder, FLAC__StreamDecoderErro
 	LOG_INFO("flac error: %s", FLAC_A(f, StreamDecoderErrorStatusString)[status]);
 }
 
+static void flac_close(void) {
+	FLAC(f, stream_decoder_delete, f->decoder);
+	f->decoder = NULL;
+}
+
 static void flac_open(u8_t sample_size, u8_t sample_rate, u8_t channels, u8_t endianness) {
+	if ( f->decoder && f->container != sample_size ) {
+		flac_close();
+	}
+
+	f->container = sample_size;
+
 	if (f->decoder) {
 		FLAC(f, stream_decoder_reset, f->decoder);
 	} else {
 		f->decoder = FLAC(f, stream_decoder_new);
 	}
-
-	if ( sample_size == 'o' ) {
+	
+	if ( f->container == 'o' ) {
 		LOG_DEBUG("ogg/flac container - using init_ogg_stream");
 		FLAC(f, stream_decoder_init_ogg_stream, f->decoder, &read_cb, NULL, NULL, NULL, NULL, &write_cb, NULL, &error_cb, NULL);
-	}
-	else {
+	} else {
 		FLAC(f, stream_decoder_init_stream, f->decoder, &read_cb, NULL, NULL, NULL, NULL, &write_cb, NULL, &error_cb, NULL);
 	}
-}
-
-static void flac_close(void) {
-	FLAC(f, stream_decoder_delete, f->decoder);
-	f->decoder = NULL;
 }
 
 static decode_state flac_decode(void) {

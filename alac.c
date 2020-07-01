@@ -293,7 +293,13 @@ static int read_mp4_header(void) {
 			l->pos += bytes;
 			l->consume = consume - bytes;
 			break;
-		} else {
+		} else if (len > streambuf->size) {
+ 			// can't process an atom larger than streambuf!
+			LOG_ERROR("atom %s too large for buffer %u %u", type, len, streambuf->size);
+			return -1;
+		 } else {
+			 // make sure there is 'len' contiguous space
+			_buf_unwrap(streambuf, len); 
 			break;
 		}
 	}
@@ -333,6 +339,7 @@ static decode_state alac_decode(void) {
 			LOCK_O;
 
 			output.next_sample_rate = decode_newstream(l->sample_rate, output.supported_rates);
+			IF_DSD( output.next_fmt = PCM; )
 			output.track_start = outputbuf->writep;
 			if (output.fade_mode) _checkfade(true);
 			decode.new_stream = false;
@@ -359,7 +366,7 @@ static decode_state alac_decode(void) {
 		return DECODE_COMPLETE;
 	}
 
-	// enough data for coding
+	// is there enough data for decoding
 	if (bytes < block_size) {
 		UNLOCK_S;
 		return DECODE_RUNNING;

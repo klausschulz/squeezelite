@@ -2,12 +2,8 @@
  *  Squeezelite - lightweight headless squeezebox emulator
  *
  *  (c) Adrian Smith 2012-2015, triode1@btinternet.com
-<<<<<<< HEAD
  *      Ralph Irving 2015-2017, ralph_irving@hotmail.com
  *  (c) Modified work Copyright Klaus Schulz 2020
-=======
- *      Ralph Irving 2015-2020, ralph_irving@hotmail.com
->>>>>>> origin/master
  *  
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -132,7 +128,7 @@ static void usage(const char *argv0) {
 #endif
 #endif
 #if VISEXPORT
-		   "  -v \t\t\tVisualiser support\n"
+		   "  -v \t\t\tVisualizer support\n"
 #endif
 # if ALSA
 		   "  -O <mixer device>\tSpecify mixer device, defaults to 'output device'\n"
