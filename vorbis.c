@@ -2,7 +2,7 @@
  *  Squeezelite - lightweight headless squeezebox emulator
  *
  *  (c) Adrian Smith 2012-2015, triode1@btinternet.com
- *      Ralph Irving 2015-2017, ralph_irving@hotmail.com
+ *      Ralph Irving 2015-2020, ralph_irving@hotmail.com
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -29,7 +29,9 @@
 *  thread has a higher priority. Using an interim buffer where vorbis decoder writes the output is not great from
 *  an efficiency (one extra memory copy) point of view, but it allows the lock to not be kept for too long
 */
+#if EMBEDDED
 #define FRAME_BUF 2048
+#endif
 
 #if BYTES_PER_FRAME == 4		
 #define ALIGN(n) 	(n)
@@ -183,16 +185,14 @@ static decode_state vorbis_decode(void) {
 		}
 	}
 	
-#if !FRAME_BUF		
-	LOCK_O_direct;
-#endif	
-
 #if FRAME_BUF
 	IF_DIRECT(
 		frames = min(_buf_space(outputbuf), _buf_cont_write(outputbuf)) / BYTES_PER_FRAME;
+		frames = min(frames, FRAME_BUF);
 		write_buf = v->write_buf;
 	);
 #else
+	LOCK_O_direct;
 	IF_DIRECT(
 		frames = min(_buf_space(outputbuf), _buf_cont_write(outputbuf)) / BYTES_PER_FRAME;
 		write_buf = outputbuf->writep;
@@ -203,9 +203,6 @@ static decode_state vorbis_decode(void) {
 		write_buf = process.inbuf;
 	);
 	
-#if FRAME_BUF	
-	frames = min(frames, FRAME_BUF);
-#endif	
 	bytes = frames * 2 * channels; // samples returned are 16 bits
 
 	// write the decoded frames into outputbuf even though they are 16 bits per sample, then unpack them
@@ -237,15 +234,21 @@ static decode_state vorbis_decode(void) {
 		frames = n / 2 / channels;
 		count = frames * channels;
 
-		iptr = (s16_t *)write_buf + count;
-		optr = (ISAMPLE_T *) outputbuf->writep + frames * 2;
+		// work backward to unpack samples (if needed)
+		iptr = (s16_t *) write_buf + count;
+		optr = (ISAMPLE_T *) write_buf + frames * 2;
 
 		if (channels == 2) {
 #if BYTES_PER_FRAME == 4
-			memcpy(outputbuf->writep, write_buf, frames * BYTES_PER_FRAME);
+#if FRAME_BUF
+			// copy needed only when DIRECT and FRAME_BUF
+			IF_DIRECT(
+				memcpy(outputbuf->writep, write_buf, frames * BYTES_PER_FRAME);
+			)
+#endif			
 #else
 			while (count--) {
-				*--optr = *--iptr << 16;
+				*--optr = ALIGN(*--iptr);
 			}
 #endif
 		} else if (channels == 1) {
