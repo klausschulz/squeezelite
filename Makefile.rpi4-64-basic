@@ -1,4 +1,4 @@
-CFLAGS  = -Wall -fPIC -O3 -mcpu=cortex-a72 -mtune=cortex-a72
-
+OPTS = -DNO_FAAD
+CFLAGS  = -Wall -fPIC -Os -march=armv8-a+crc -pipe
 
 include Makefile
