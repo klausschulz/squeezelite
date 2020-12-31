@@ -57,7 +57,7 @@
 #define CODECS CODECS_BASE CODECS_AAC CODECS_FF CODECS_OPUS CODECS_DSD CODECS_MP3
 
 static void usage(const char *argv0) {
-	printf(TITLE " See -t for license terms\n"
+	printf("%s %s",TITLE " See -t for license terms\n"
 		   "Usage: %s [options]\n"
 		   "  -s <server>[:<port>]\tConnect to specified server, otherwise uses autodiscovery to find server\n"
 		   "  -o <output device>\tSpecify output device, default \"default\", - = output to stdout\n"
