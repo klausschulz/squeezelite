@@ -1,0 +1,4 @@
+OPTS = -DNO_FAAD
+CFLAGS  = -Wall -fPIC -O3 -march=armv8-a+crc -mtune=cortex-a72 -pipe
+
+include Makefile
