@@ -2,7 +2,7 @@
  *  Squeezelite - lightweight headless squeezebox emulator
  *
  *  (c) Adrian Smith 2012-2015, triode1@btinternet.com
- *      Ralph Irving 2015-2017, ralph_irving@hotmail.com
+ *      Ralph Irving 2015-2021, ralph_irving@hotmail.com
  *  
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
- * Additions (c) Paul Hermann, 2015-2017 under the same license terms
+ * Additions (c) Paul Hermann, 2015-2021 under the same license terms
  *   -Control of Raspberry pi GPIO for amplifier power
  *   -Launch script on power status change from LMS
  */
@@ -96,16 +96,22 @@ void send_packet(u8_t *packet, size_t len) {
 	u8_t *ptr = packet;
 	unsigned try = 0;
 	ssize_t n;
+	int error;
 
 	while (len) {
 		n = send(sock, ptr, len, MSG_NOSIGNAL);
 		if (n <= 0) {
-			if (n < 0 && last_error() == ERROR_WOULDBLOCK && try < 10) {
+			error = last_error();
+#if WIN
+			if (n < 0 && (error == ERROR_WOULDBLOCK || error == WSAENOTCONN) && try < 10) {
+#else
+			if (n < 0 && error == ERROR_WOULDBLOCK && try < 10) {
+#endif
 				LOG_DEBUG("retrying (%d) writing to socket", ++try);
 				usleep(1000);
 				continue;
 			}
-			LOG_INFO("failed writing to socket: %s", strerror(last_error()));
+			LOG_WARN("failed writing to socket: %s", strerror(last_error()));
 			return;
 		}
 		ptr += n;
