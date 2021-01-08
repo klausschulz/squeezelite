@@ -1,6 +1,0 @@
-OPTS = -DRESAMPLE -DDSD
-CFLAGS = -Wall -fPIC -O3 -mcpu=cortex-a53 -mtune=cortex-a53 -mfpu=neon-fp-armv8 -mneon-for-64bits -mfloat-abi=hard
- 
-
-include Makefile
-
