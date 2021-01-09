@@ -32,7 +32,7 @@ ifeq ($(bitd_s),64)
 
 else ifeq ($(bitd_s),32)
 
-   TUNEOPTS := -mfpu=neon-fp-armv8 -mneon-for-64bits -mfloat-abi=hard
+   TUNEOPTS := -mfpu=neon-fp-armv8 -mfloat-abi=hard
 
 endif
 
@@ -45,6 +45,6 @@ endif
 
 OPTS = -DNO_FAAD
 
-CFLAGS  = -Wall -fPIC -O3 $(MARCH) $(MTUNE) $(TUNEOPS) -pipe
+CFLAGS  = -Wall -fPIC -O3 $(MARCH) $(MTUNE) $(TUNEOPTS) -pipe
 
 include Makefile
