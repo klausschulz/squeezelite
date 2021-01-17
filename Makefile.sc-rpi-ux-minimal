@@ -1,12 +1,12 @@
-# RPI makefile for Ux systems that autodetects
+# RPI makefile for UX systems that autodetects
 #  - bitdepth of system
-#  - RPi model ( 3 or 4 )
+#  - RPi standard and CM models ( 3 or 4 )
 # and applies optimal processor specific compiler options
 
 SHELL := /bin/sh
 
 bitd_s := $(shell getconf LONG_BIT)
-rpi_m  := $(shell cat /proc/device-tree/model | cut -f 3  -d ' ')
+rpi_m  := $(shell cat /proc/device-tree/model | grep -o -E '[34]')
 
 
 ifeq ($(rpi_m),4)
