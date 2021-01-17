@@ -6,7 +6,7 @@
 SHELL := /bin/sh
 
 bitd_s := $(shell getconf LONG_BIT)
-rpi_m  := $(shell cat /proc/device-tree/model | grep -o -E '[34]')
+rpi_m  := $(shell cat /proc/device-tree/model | awk -v RS=[0-9]+ '{print RT+0;exit}')
 
 
 ifeq ($(rpi_m),4)
