@@ -25,8 +25,8 @@
 // make may define: PORTAUDIO, SELFPIPE, RESAMPLE, RESAMPLE_MP, VISEXPORT, GPIO, IR, DSD, LINKALL to influence build
 
 #define MAJOR_VERSION "1.9"
-#define MINOR_VERSION "8"
-#define MICRO_VERSION "1344"
+#define MINOR_VERSION "9"
+#define MICRO_VERSION "1371"
 #define CUSTOM_VERSION -sc-002
 
 #if defined(CUSTOM_VERSION)
@@ -427,6 +427,7 @@ struct wake {
 #define MAX_SILENCE_FRAMES 2048
 
 #define FIXED_ONE 0x10000
+#define MONO_FLAG 0x20000
 
 #define BYTES_PER_FRAME 8
 
@@ -623,6 +624,7 @@ typedef enum { FADE_NONE = 0, FADE_CROSSFADE, FADE_IN, FADE_OUT, FADE_INOUT } fa
 struct outputstate {
 	output_state state;
 	output_format format;
+	u8_t channels;
 	const char *device;
 #if ALSA
 	unsigned buffer;
@@ -761,16 +763,15 @@ struct codec *register_ff(const char *codec);
 struct codec *register_opus(void);
 #endif
 
-//gpio.c
+// gpio.c
 #if GPIO
-void relay( int state);
+void relay(int state);
 void relay_script(int state);
 int gpio_pin;
 bool gpio_active_low;
 bool gpio_active;
 char *power_script;
-//  my amp state
-int ampstate;
+
 #if RPI
 #define PI_INPUT  0
 #define PI_OUTPUT 1

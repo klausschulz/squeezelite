@@ -120,7 +120,7 @@ void send_packet(u8_t *packet, size_t len) {
 }
 
 static void sendHELO(bool reconnect, const char *fixed_cap, const char *var_cap, u8_t mac[6]) {
-	#define BASE_CAP "Model=squeezelite,AccuratePlayPoints=1,HasDigitalOut=1,HasPolarityInversion=1,Firmware=" VERSION
+	#define BASE_CAP "Model=squeezelite,AccuratePlayPoints=1,HasDigitalOut=1,HasPolarityInversion=1,Balance=1,Firmware=" VERSION
 	#define SSL_CAP "CanHTTPS=1"
 	const char *base_cap;
 	struct HELO_packet pkt;
@@ -380,7 +380,8 @@ static void process_strm(u8_t *pkt, int len) {
 			output.fade_mode = strm->transition_type - '0';
 			output.fade_secs = strm->transition_period;
 			output.invert    = (strm->flags & 0x03) == 0x03;
-			LOG_DEBUG("set fade mode: %u", output.fade_mode);
+			output.channels  = (strm->flags & 0x0c) >> 2;
+			LOG_DEBUG("set fade mode: %u, channels: %u, invert: %u", output.fade_mode, output.channels, output.invert);
 			UNLOCK_O;
 		}
 		break;
@@ -875,7 +876,11 @@ void slimproto(log_level level, char *server, u8_t mac[6], const char *name, con
 
 	LOCK_O;
 	snprintf(fixed_cap, FIXED_CAP_LEN, ",ModelName=%s,MaxSampleRate=%u", modelname ? modelname : MODEL_NAME_STRING,
+#if RESAMPLE
 			 ((maxSampleRate > 0) ? maxSampleRate : output.supported_rates[0]));
+#else
+			 ((maxSampleRate > 0 && maxSampleRate < output.supported_rates[0]) ? maxSampleRate : output.supported_rates[0]));
+#endif
 	
 	for (i = 0; i < MAX_CODECS; i++) {
 		if (codecs[i] && codecs[i]->id && strlen(fixed_cap) < FIXED_CAP_LEN - 10) {

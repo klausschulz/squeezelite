@@ -789,11 +789,9 @@ static void *output_thread(void *arg) {
 #if GPIO
 			// Wake up amp
 			if (gpio_active) { 
-				ampstate = 1;
 				relay(1);
 			}
 			if (power_script != NULL) {
-				ampstate = 1;
 				relay_script(1);
 			}
 #endif
@@ -923,11 +921,9 @@ static void *output_thread(void *arg) {
 #if GPIO
 			//  Put Amp to Sleep
 			if (gpio_active){
-				ampstate = 0;
 				relay(0);
 			}
 			if (power_script != NULL ){
-				ampstate = 0;
 				relay_script(0);
 			}
 #endif

@@ -143,9 +143,7 @@ static void usage(const char *argv0) {
 #if LINUX || FREEBSD || SUN
 		   "  -z \t\t\tDaemonize\n"
 #endif
-#if RESAMPLE
 		   "  -Z <rate>\t\tReport rate to server in helo as the maximum sample rate we can support\n"
-#endif
 		   "  -t \t\t\tLicense terms\n"
 		   "  -? || -h \t\tDisplay this help text\n"
 		   "\n"
@@ -361,16 +359,9 @@ int main(int argc, char **argv) {
 
 	while (optind < argc && strlen(argv[optind]) >= 2 && argv[optind][0] == '-') {
 		char *opt = argv[optind] + 1;
-		if (strstr("oabcCdefmMnNpPrs"
+		if (strstr("oabcCdefmMnNpPrsZ"
 #if ALSA
 				   "UVO"
-#endif
-/* 
- * only allow '-Z <rate>' override of maxSampleRate 
- * reported by client if built with the capability to resample!
- */
-#if RESAMPLE
-				   "Z"
 #endif
 				   , opt) && optind < argc - 1) {
 			optarg = argv[optind + 1];
@@ -537,6 +528,9 @@ int main(int argc, char **argv) {
 		case 'N':
 			namefile = optarg;
 			break;
+		case 'Z':
+			maxSampleRate = atoi(optarg);
+			break;
 		case 'W':
 			pcm_check_header = true;
 			break;
@@ -567,9 +561,6 @@ int main(int argc, char **argv) {
 			} else {
 				resample = "";
 			}
-			break;
-		case 'Z':
-			maxSampleRate = atoi(optarg);
 			break;
 #endif
 #if DSD
